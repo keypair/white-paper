@@ -154,6 +154,152 @@ only charged a transaction fee and the cost of execution.
 The sale conditions are transparent, but whether the actual object ever
 arrives is outside the scope of the blockchain
 
+
+\subsubsection{Oracles example}
+
+An example of the use of oracles and contracts can be illustrated with
+a little lottery example. Note that all computation on a blockchain
+should be deterministic in order to be able to validate the
+results. If not exactly the same, the corresponding state hashes will
+differ. As a consequence there is no random number generator in the
+Sophia language\footnote{Even if some kind of random function would be
+  offered, it would be deterministic and hence have a predictable
+  outcome}. (Instead, the current blockhash could be used as entropy.)
+
+Running a simple lottery in which users buy a ticket and after a while
+one draws one of the tickets as the winner, is somehow depending on
+some kind of fair randomness. If the number is known or computable at
+the start of the buying process, one might be able to figure out what
+ticket to buy to win the lottery. But if we close the lottery and then
+ask an oracle for a random number, then a trusted, but disconnected
+computation can be used to draw the winner.
+
+So assume there is such an oracle, monitoring the chain and registered
+with a reasonable query fee covering for its cost of operation. The
+oracle has an identifier, for the example say
+\begin{quote}
+  \textit{"ok\_shEHMV8Q2F1HR86pcyF7DYpudg8hnvJwJuVE3berWpbktnL2R"}.
+\end{quote}
+We can now write a Sophia contract that takes this oracle identifier
+as input of its initialization and uses it for random numbers in the
+lottery game.
+
+\begin{verbatim}
+include "List.aes"
+
+contract Lottery =
+
+  record state = { participants : list(address),
+                   price_sum : int(),
+                   close_height : int(),
+                   oracle : oracle(int, int),
+                   query : option(oracle_query(int, int))  }
+
+  entrypoint init(rand : oracle(int, int)) : state =
+    { participants = [],
+      price_sum = 0,
+      close_height = 0,
+      oracle = rand,
+      query = None }
+\end{verbatim}
+
+The contract stores a list of participants in its state, a price sum
+that increases for each ticket bought, a closing height after which no
+new tickets can be purchased. The initial closing height is zero,
+because initially there is no ongoing lottery. The state also contains
+an oracle and an optional query. This query will be instantiated when
+the lottery is closed and a ticket is drawn.
+
+The creator of this contract may now start the lottery by supplying a relative
+closing height,
+for example, 20 key-blocks from that the transaction gets on chain;
+approximately one hour. Any user can then buy a ticket.
+\begin{verbatim}
+  stateful payable entrypoint start(n : int) =
+    require( Call.caller == Contract.creator, "not creator" )
+    require( state.price_sum == 0, "lottery ongoing" )
+    require( n > 1, "block in future")
+    put(state{ participants = [],
+               close_height = Chain.block_height + n })
+
+  stateful payable entrypoint buy() =
+    require( state.close_height > Chain.block_height, "lottery closed" )
+    require( Call.value == 10, "price ticket 10" )
+    put(state{ participants = Call.caller :: state.participants,
+               price_sum = state.price_sum + 8 })  // we take 20%
+\end{verbatim}
+Note that a lot of conditions are checked, resulting in abortion of
+the contract when falsified. In general, making the contract safe
+requires thinking through a large number of possible scenarios in
+which things may not work out as expected.
+For example, if no users buy a ticket\footnote{The price of the ticket
+is set to $10$ aettos instead of a more realistic
+$10\_000\_000\_000\_000\_000$ to
+make the code more readable}, the contract creator must be
+able to restart the lottery at a later time, but the creator should
+not be able to restart as soon as there are participants. Similarly,
+one should not allow participants to buy tickets when the lottery is
+closed.
+
+The keyword \verb+payable+ expresses that we expect the participants
+to add a token amount to the contract call transaction, which is
+checked by comparing \verb+Call.value+. Similarly, the contract
+creator needs to pay something into the contract to cover the oracle query
+fee\footnote{Note that there is no check in the contract that it has
+  enough funds to query the oracle after starting a lottery. The
+  participants are at risk here} in case there are too few
+participants.
+
+When the closing height is reached, someone, most likely the creator
+of the contract, asks the oracle to draw a number between 1 and the
+number of participants. This call returns the query., such that anyone
+can monitor the chain to see if the query has arrived. When that's the
+case, the winner, or anyone else, can call the claim function, which
+will transfer the price sum to the winner.
+\begin{verbatim}
+ stateful entrypoint draw() : oracle_query(int, int) =
+     require( Chain.block_height > state.close_height, "ongoing lottery" )
+     require( state.price_sum > 0, "no ongoing lottery" )
+     require( state.query == None, "already drawn" )
+     let q =
+        Oracle.query(state.oracle, List.length(state.participants) - 1,
+                     Oracle.query_fee(state.oracle),
+                     RelativeTTL(5), RelativeTTL(480))
+     put(state{query = Some(q)})
+     q
+
+  stateful entrypoint claim() : option(address) =
+    switch(state.query)
+        None => abort( "no drawing" )
+        Some(query) =>
+          switch( Oracle.get_answer(state.oracle, query))
+             None => abort("waiting for query")
+             Some(winner) =>
+               let winner_account = List.get(winner, state.participants)
+               // Spend to winner
+               Chain.spend(winner_account, state.price_sum)
+               put(state{ price_sum = 0, query = None })
+               Some(winner_account)
+\end{verbatim}
+
+The reason to make it possible for anyone to call these functions is
+to ensure that the contract creator can force progress to start a new
+lottery and the winner to be able to claim even if the contract owner
+is not around. The TTLs in the query assure that the oracle has
+approximately 15 minutes to answer, long enough to even get it out
+in busy times. Within a day one then has to claim the price sum,
+otherwise, because the query answer is then no longer on chain.
+
+This contract is far from fully secure, but illustrates an example of
+how oracles and contracts can be used together.
+
+%TODO \subsubsection{Oracles and state channel example}
+
+
+\subsection{Readable Smart Contracts in Lexon}
+Human readable smart contracts compiling to Sophia.
+...
+
 \subsection{The FATE virtual machine}
 \label{sect:fate}
 
@@ -255,3 +401,4 @@ bytes that are printed as a string.
 
 Both memory constraints and computation efficiency are important to
 enable smaller contracts to to get more computation into a micro-block.
+

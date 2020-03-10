@@ -1,4 +1,4 @@
-\section{Transaction types}
+\section{Transactions and Blockchain primitives}
 \label{sect:transactions}
 
 Transactions, more appropriately operations, specify state transitions to
@@ -8,39 +8,147 @@ via smart contracts, \aet\ has many different kinds of transactions.
 These are provided as convenient built-in functionality for frequently used
 features, while all other functionality can still be realized via smart
 contracts.
-Every state transition caused by such a transaction has a computational
+
+
+
+\subsection{AE coins}
+\label{sect:aespend}
+
+The AE coin (formerly also AE token or aeon) is the native currency of the \aet\ blockchain. The most basic transaction is the \textbf{spend transaction} used to
+transfer AE coins from sender to receiver. The receiver can either be an account,
+oracle or smart contract. 
+In addition to coin transfers and smart contract calls, a sender can also attach an arbitrary binary
+payload, which can for example be used for proof of existence, registering a
+hash or file on the blockchain.
+
+\subsubsection{Fees for usage}
+AE coins are required for any operation on the \aet\ blockchain as a transaction or gas fee. For smart contract calls, every state transition caused by such a transaction has a computational
 complexity, both in terms of storage size and execution, and given that we are
 building an open, permissionless network, we need to measure and possibly
 regulate the amount of computation used. We refer to this measure as "gas" and
 each block has a maximum amount of gas it can contain.
-This gas must be bought via the natively available currency and therefore only
-accounts with enough currency can submit valid transactions, although it is
+This gas must be bought via the AE coin and therefore only
+accounts with enough coins can submit valid transactions, although it is
 possible to author transactions on behalf of others. All gas, or simply fees,
 are paid to miners.
+
+
+\subsection{Accounts and Signatures}
+\label{sect:ga}
+
+\subsubsection{Standard accounts}
 To prevent anyone from spending currency that is not theirs, among other
 things, transactions are authenticated either via digital signatures using
 Ed25519 \cite{bernstein2012high, bernstein2006curve25519} or by user specified
 logic in generalized accounts (\ref{sect:ga}).
 Replay protection is achieved via a strictly increasing nonce \cite{Syverson}.
+\subsubsection{Generalized accounts}
 
-\subsection{Sending coins}
-\label{sect:aespend}
+"Generalized accounts" are a way to provide more flexibility to authenticating
+transactions. This can, for example, be useful when one would allow users to
+sign transactions with other cryptographic primitives than the
+default\footnote{Some hardware devices may be restricted to other cryptographic
+signing algorithms than the default on the \blockchain.} EdDSA as mentioned in
+Sect.\ \ref{sect:transactions}.
 
-The most basic transaction is the \textbf{spend transaction} used to
-transfer coins from sender to receiver. The receiver can either be an account,
-oracle or contract.
-In addition to coin transfers, a sender can also attach an arbitrary binary
-payload, which can for example be used for proof of existence, registering a
-hash or file on the blockchain.
+If a user wants to have a generalized account, then they must
+provide a smart contract in a \textbf{attach transaction}. This
+contract is thereafter attached to the given account. The contract
+must have an authentication function that returns a boolean whether or
+not authentication is successful. The attach transaction itself is
+just like all previously mentioned transactions signed in the default
+way. It turns a normal account into a generalized account, and
+\textit{there is no way back}.
+
+When an account is a generalized account, any transaction can
+be wrapped in a so called \textbf{meta transaction}. That is, one
+prepares an ordinary transaction in the usual way, but with a nonce set to
+zero. After that, one adds additional fee, gas and authentication data to
+run the smart contract. When this transaction is processed, the
+authentication function in the smart contract associated with the
+account is called with the provided authentication data as input. If
+the authentication fails the transaction is discarded, otherwise its
+inner transaction is processed.
+
+The following smart contract is an example that allows signing with
+the ECDSA algorithm \cite{johnson2001elliptic} and the popular elliptic curve
+Secp256k1, used for example by Bitcoin and Ethereum
+\cite{bos2014elliptic, mayer2016ecdsa}.
+
+\begin{verbatim}
+contract ECDSAAuth =
+  record state = { nonce : int, owner : bytes(20) }
+
+  entrypoint init(owner' : bytes(20)) = { nonce = 1, owner = owner' }
+
+  stateful entrypoint authorize(n : int, s : bytes(65)) : bool =
+    require(n >= state.nonce, "Nonce too low")
+    require(n =< state.nonce, "Nonce too high")
+    put(state{ nonce = n + 1 })
+    switch(Auth.tx_hash)
+      None          => abort("Not in Auth context")
+      Some(tx_hash) =>
+        Crypto.ecverify_secp256k1(to_sign(tx_hash, n), state.owner, s)
+
+  function to_sign(h : hash, n : int) : hash =
+    Crypto.blake2b((h, n))
+
+\end{verbatim}
+
+The contract is initialized by providing the public key used for
+signing and the nonce (in the contract state) is set to 1. The
+authentication function takes two parameters, the nonce and the signature.
+The authorization function checks that the nonce is correct, and then
+proceeds to fetch the TX hash from the contract environment using
+\verb+Auth.tx_hash+. In this example the signature is for the Blake2b
+hash of the tuple of the transaction hash and the nonce). The
+authorization finally checks that the private key used for signing the
+hash was from the owner.
 
 
-\subsection{Aeternity naming system}
+By attaching this contract to an aeternity account, users can sign
+aeternity transactions with their bitcoin private key. They need to
+keep track, of course, what nonces they have used for this contract,
+to provide the right next nonce.
+
+\paragraph{Security considerations}
+
+Before the authentication is performed, there is no account that one
+can charge for the computational effort of running the authentication
+function. After all, anyone could wrap a transaction in a \textbf{meta
+  transaction} and submit it. It would be an easy attack to empty a
+generalized account if the account had to pay for failed authorization
+attempts. So, the gas for authentication is only charged when
+successful. This opens up for another unpleasant attack.
+
+Since there is no cost involved for the user to run an authentication
+function, but the miner needs to spend execution cycles, one could
+potentially write a complex function as authentication function and
+extract resources from a miner by calling one's own authentication
+function with failing input data. This is mitigated by not allowing
+expensive chain operations in an authentication call. Moreover, miners
+are free to implement any sophisticated rules for accepting
+transactions in their mining pool, such that they can reject this
+behaviour when observed.
+
+Using different signature algorithms is only one of many possible uses
+of generalized accounts. Other uses cases can be multi-sig, spending
+limits (per week/month), limiting the transaction types, and more. For
+these applications smart contracts have to be written. Utmost care
+needs to be taken when implementing the authorization
+function in these smart contracts. If the contract does not enforce
+integrity checking or replay protection, then it will be vulnerable to
+abuse.
+
+
+
+\subsection{ÆNS and .chain name space}
 \label{sect:aens}
 
 By default all objects addressable within the blockchain are identified by
 256 bit numbers. Just like users of the web prefer remembering DNS names over
 IP addresses, users of \aet\ have the option to using names. Currently all
-names have the extension \textit{.chain}, e.g. \textit{emin.chain}.
+names have the extension \textit{.chain}, e.g. \textit{superhero.chain}.
 
 Major challenges for a naming system are to offer a reasonably fair system to
 distribute names and discourage name squatting. To achieve those two goals we
@@ -49,8 +157,8 @@ more coveted. Names longer than twelve characters can be registered instantly.
 
 The auction has two parameters, the initial starting bid and closing timeout
 after the last bit, which are adjusted based on the name being auctioned.
-For example, the 4 character name \textit{emin}, starts with an initial
-bid of 134.6269 coins and the auction would be open 29760 blocks (approx 62
+For example, the 4 character name \textit{superhero}, starts with an initial
+bid of INSERTcorrectNUMBER AE and the auction would be open INSNUM blocks (approx INSNUM
 days) after the last valid bid.
 Each bid must be at least 5\% higher than the previous one in order to be
 valid. Every successful bid will lock up the given number of coins and free
@@ -97,7 +205,7 @@ chain and then substitute the name by an account. If a user want to
 transfer tokens to Emin, the user should put the name hash of
 \textit{emin.chain} in the transaction and sign this transaction.
 
-\subsection{Aeternity oracles}
+\subsection{Oracles for data from outside}
 \label{sect:aeoracle}
 
 Oracles are a mechanism to bring arbitrary external data onto the blockchain,
@@ -172,245 +280,12 @@ are no longer resulting in a response. The lifetime of an oracle can
 be extended using an \textbf{extend oracle transaction}.
 
 
-\subsubsection{A lottery example}
-
-An example of the use of oracles and contracts can be illustrated with
-a little lottery example. Note that all computation on a blockchain
-should be deterministic in order to be able to validate the
-results. If not exactly the same, the corresponding state hashes will
-differ. As a consequence there is no random number generator in the
-Sophia language\footnote{Even if some kind of random function would be
-  offered, it would be deterministic and hence have a predictable
-  outcome}.
-
-Running a simple lottery in which users buy a ticket and after a while
-one draws one of the tickets as the winner, is somehow depending on
-some kind of fair randomness. If the number is known or computable at
-the start of the buying process, one might be able to figure out what
-ticket to buy to win the lottery. But if we close the lottery and then
-ask an oracle for a random number, then a trusted, but disconnected
-computation can be used to draw the winner.
-
-So assume there is such an oracle, monitoring the chain and registered
-with a reasonable query fee covering for its cost of operation. The
-oracle has an identifier, for the example say
-\begin{quote}
-  \textit{"ok\_shEHMV8Q2F1HR86pcyF7DYpudg8hnvJwJuVE3berWpbktnL2R"}.
-\end{quote}
-We can now write a Sophia contract that takes this oracle identifier
-as input of its initialization and uses it for random numbers in the
-lottery game.
-
-\begin{verbatim}
-include "List.aes"
-
-contract Lottery =
-
-  record state = { participants : list(address),
-                   price_sum : int(),
-                   close_height : int(),
-                   oracle : oracle(int, int),
-                   query : option(oracle_query(int, int))  }
-
-  entrypoint init(rand : oracle(int, int)) : state =
-    { participants = [],
-      price_sum = 0,
-      close_height = 0,
-      oracle = rand,
-      query = None }
-\end{verbatim}
-
-The contract stores a list of participants in its state, a price sum
-that increases for each ticket bought, a closing height after which no
-new tickets can be purchased. The initial closing height is zero,
-because initially there is no ongoing lottery. The state also contains
-an oracle and an optional query. This query will be instantiated when
-the lottery is closed and a ticket is drawn.
-
-The creator of this contract may now start the lottery by supplying a relative
-closing height,
-for example, 20 key-blocks from that the transaction gets on chain;
-approximately one hour. Any user can then buy a ticket.
-\begin{verbatim}
-  stateful payable entrypoint start(n : int) =
-    require( Call.caller == Contract.creator, "not creator" )
-    require( state.price_sum == 0, "lottery ongoing" )
-    require( n > 1, "block in future")
-    put(state{ participants = [],
-               close_height = Chain.block_height + n })
-
-  stateful payable entrypoint buy() =
-    require( state.close_height > Chain.block_height, "lottery closed" )
-    require( Call.value == 10, "price ticket 10" )
-    put(state{ participants = Call.caller :: state.participants,
-               price_sum = state.price_sum + 8 })  // we take 20%
-\end{verbatim}
-Note that a lot of conditions are checked, resulting in abortion of
-the contract when falsified. In general, making the contract safe
-requires thinking through a large number of possible scenarios in
-which things may not work out as expected.
-For example, if no users buy a ticket\footnote{The price of the ticket
-is set to $10$ aettos instead of a more realistic
-$10\_000\_000\_000\_000\_000$ to
-make the code more readable}, the contract creator must be
-able to restart the lottery at a later time, but the creator should
-not be able to restart as soon as there are participants. Similarly,
-one should not allow participants to buy tickets when the lottery is
-closed.
-
-The keyword \verb+payable+ expresses that we expect the participants
-to add a token amount to the contract call transaction, which is
-checked by comparing \verb+Call.value+. Similarly, the contract
-creator needs to pay something into the contract to cover the oracle query
-fee\footnote{Note that there is no check in the contract that it has
-  enough funds to query the oracle after starting a lottery. The
-  participants are at risk here} in case there are too few
-participants.
-
-When the closing height is reached, someone, most likely the creator
-of the contract, asks the oracle to draw a number between 1 and the
-number of participants. This call returns the query., such that anyone
-can monitor the chain to see if the query has arrived. When that's the
-case, the winner, or anyone else, can call the claim function, which
-will transfer the price sum to the winner.
-\begin{verbatim}
- stateful entrypoint draw() : oracle_query(int, int) =
-     require( Chain.block_height > state.close_height, "ongoing lottery" )
-     require( state.price_sum > 0, "no ongoing lottery" )
-     require( state.query == None, "already drawn" )
-     let q =
-        Oracle.query(state.oracle, List.length(state.participants) - 1,
-                     Oracle.query_fee(state.oracle),
-                     RelativeTTL(5), RelativeTTL(480))
-     put(state{query = Some(q)})
-     q
-
-  stateful entrypoint claim() : option(address) =
-    switch(state.query)
-        None => abort( "no drawing" )
-        Some(query) =>
-          switch( Oracle.get_answer(state.oracle, query))
-             None => abort("waiting for query")
-             Some(winner) =>
-               let winner_account = List.get(winner, state.participants)
-               // Spend to winner
-               Chain.spend(winner_account, state.price_sum)
-               put(state{ price_sum = 0, query = None })
-               Some(winner_account)
-\end{verbatim}
-
-The reason to make it possible for anyone to call these functions is
-to ensure that the contract creator can force progress to start a new
-lottery and the winner to be able to claim even if the contract owner
-is not around. The TTLs in the query assure that the oracle has
-approximately 15 minutes to answer, long enough to even get it out
-in busy times. Within a day one then has to claim the price sum,
-otherwise, because the query answer is then no longer on chain.
-
-This contract is far from fully secure, but illustrates an example of
-how oracles and contracts can be used together.
-
-\subsection{Generalized accounts}
-\label{sect:ga}
-
-Generalized accounts are a way to provide more flexibility to authenticating
-transactions. This can, for example, be useful when one would allow users to
-sign transactions with other cryptographic primitives than the
-default\footnote{Some hardware devices may be restricted to other cryptographic
-signing algorithms than the default on the \blockchain.} EdDSA as mentioned in
-Sect.\ \ref{sect:transactions}.
-
-If a user wants to have a generalized account, then they must
-provide a smart contract in a \textbf{attach transaction}. This
-contract is thereafter attached to the given account. The contract
-must have an authentication function that returns a boolean whether or
-not authentication is successful. The attach transaction itself is
-just like all previously mentioned transactions signed in the default
-way. It turns a normal account into a generalized account, and
-\textit{there is no way back}.
-
-When an account is a generalized account, any transaction can
-be wrapped in a so called \textbf{meta transaction}. That is, one
-prepares an ordinary transaction in the usual way, but with a nonce set to
-zero. After that, one adds additional fee, gas and authentication data to
-run the smart contract. When this transaction is processed, the
-authentication function in the smart contract associated with the
-account is called with the provided authentication data as input. If
-the authentication fails the transaction is discarded, otherwise its
-inner transaction is processed.
-
-The following smart contract is an example that allows signing with
-the ECDSA algorithm \cite{johnson2001elliptic} and the popular elliptic curve
-Secp256k1, used for example by Bitcoin and Ethereum
-\cite{bos2014elliptic, mayer2016ecdsa}.
-
-\begin{verbatim}
-contract ECDSAAuth =
-  record state = { nonce : int, owner : bytes(20) }
-
-  entrypoint init(owner' : bytes(20)) = { nonce = 1, owner = owner' }
-
-  stateful entrypoint authorize(n : int, s : bytes(65)) : bool =
-    require(n >= state.nonce, "Nonce too low")
-    require(n =< state.nonce, "Nonce too high")
-    put(state{ nonce = n + 1 })
-    switch(Auth.tx_hash)
-      None          => abort("Not in Auth context")
-      Some(tx_hash) =>
-        Crypto.ecverify_secp256k1(to_sign(tx_hash, n), state.owner, s)
-
-  function to_sign(h : hash, n : int) : hash =
-    Crypto.blake2b((h, n))
-
-\end{verbatim}
-
-The contract is initialized by providing the public key used for
-signing and the nonce (in the contract state) is set to 1. The
-authentication function takes two parameters, the nonce and the signature.
-The authorization function checks that the nonce is correct, and then
-proceeds to fetch the TX hash from the contract environment using
-\verb+Auth.tx_hash+. In this example the signature is for the Blake2b
-hash of the tuple of the transaction hash and the nonce). The
-authorization finally checks that the private key used for signing the
-hash was from the owner.
 
 
-By attaching this contract to an aeternity account, users can sign
-aeternity transactions with their bitcoin private key. They need to
-keep track, of course, what nonces they have used for this contract,
-to provide the right next nonce.
-
-\subsubsection{Security considerations}
-
-Before the authentication is performed, there is no account that one
-can charge for the computational effort of running the authentication
-function. After all, anyone could wrap a transaction in a \textbf{meta
-  transaction} and submit it. It would be an easy attack to empty a
-generalized account if the account had to pay for failed authorization
-attempts. So, the gas for authentication is only charged when
-successful. This opens up for another unpleasant attack.
-
-Since there is no cost involved for the user to run an authentication
-function, but the miner needs to spend execution cycles, one could
-potentially write a complex function as authentication function and
-extract resources from a miner by calling one's own authentication
-function with failing input data. This is mitigated by not allowing
-expensive chain operations in an authentication call. Moreover, miners
-are free to implement any sophisticated rules for accepting
-transactions in their mining pool, such that they can reject this
-behaviour when observed.
-
-Using different signature algorithms is only one of many possible uses
-of generalized accounts. Other uses cases can be multi-sig, spending
-limits (per week/month), limiting the transaction types, and more. For
-these applications smart contracts have to be written. Utmost care
-needs to be taken when implementing the authorization
-function in these smart contracts. If the contract does not enforce
-integrity checking or replay protection, then it will be vulnerable to
-abuse.
 
 
-\subsection{Financing transaction costs}
+
+\subsection{Paying-for-others transaction wrapper}
 \label{sect:payingfor}
 
 In order to make users enthusiastic about a blockchain application,
