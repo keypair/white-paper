@@ -1,7 +1,8 @@
 \section{Transactions and Blockchain primitives}
 \label{sect:transactions}
 
-Transactions, more appropriately operations, specify state transitions to
+Transactions, more appropriately \textit{operations}, specify state transitions
+to
 be applied to the state of the blockchain. As opposed to for example Ethereum,
 where only one type of transaction exists and all additional logic is enforced
 via smart contracts, \aet\ has many different kinds of transactions.
@@ -14,31 +15,41 @@ contracts.
 \subsection{AE coins}
 \label{sect:aespend}
 
-The AE coin (formerly also AE token or aeon) is the native currency of the \aet\ blockchain. The most basic transaction is the \textbf{spend transaction} used to
-transfer AE coins from sender to receiver. The receiver can either be an account,
+The AE coin (formerly also AE token or aeon) is the native currency of the
+\aet\ blockchain. The most basic transaction is the \textbf{spend} transaction
+used to
+transfer AE coins from sender to receiver. The receiver can either be an
+account,
 oracle or smart contract. 
-In addition to coin transfers and smart contract calls, a sender can also attach an arbitrary binary
+In addition to coin transfers and smart contract calls, a sender can also
+attach an arbitrary binary
 payload, which can for example be used for proof of existence, registering a
 hash or file on the blockchain.
 
 \subsubsection{Fees for usage}
-AE coins are required for any operation on the \aet\ blockchain as a transaction or gas fee. For smart contract calls, every state transition caused by such a transaction has a computational
-complexity, both in terms of storage size and execution, and given that we are
+AE coins are required for any operation on the \aet\ blockchain as a
+transaction or \enquote{gas fee}. For smart contract calls, every state
+transition
+caused
+by such a transaction has a \textit{computational
+complexity}, both in terms of storage size and execution, and given that we are
 building an open, permissionless network, we need to measure and possibly
-regulate the amount of computation used. We refer to this measure as "gas" and
+regulate the amount of computation used. We refer to this measure as
+\enquote{gas}
+and
 each block has a maximum amount of gas it can contain.
 This gas must be bought via the AE coin and therefore only
 accounts with enough coins can submit valid transactions, although it is
 possible to author transactions on behalf of others. All gas, or simply fees,
-are paid to miners.
+is paid to miners.
 
 
 \subsection{Accounts and Signatures}
 \label{sect:ga}
 
 \subsubsection{Standard accounts}
-To prevent anyone from spending currency that is not theirs, among other
-things, transactions are authenticated either via digital signatures using
+To prevent anyone from spending currency that is not theirs transactions are
+authenticated either via digital signatures using
 Ed25519 \cite{bernstein2012high, bernstein2006curve25519} or by user specified
 logic in generalized accounts (\ref{sect:ga}).
 Replay protection is achieved via a strictly increasing nonce \cite{Syverson}.
@@ -106,8 +117,8 @@ authorization finally checks that the private key used for signing the
 hash was from the owner.
 
 
-By attaching this contract to an aeternity account, users can sign
-aeternity transactions with their bitcoin private key. They need to
+By attaching this contract to an \aet\ account, users can sign
+\aet\ transactions with their bitcoin private key. They need to
 keep track, of course, what nonces they have used for this contract,
 to provide the right next nonce.
 
@@ -158,7 +169,8 @@ more coveted. Names longer than twelve characters can be registered instantly.
 The auction has two parameters, the initial starting bid and closing timeout
 after the last bit, which are adjusted based on the name being auctioned.
 For example, the 4 character name \textit{superhero}, starts with an initial
-bid of INSERTcorrectNUMBER AE and the auction would be open INSNUM blocks (approx INSNUM
+bid of INSERTcorrectNUMBER AE and the auction would be open INSNUM blocks
+(approx INSNUM
 days) after the last valid bid.
 Each bid must be at least 5\% higher than the previous one in order to be
 valid. Every successful bid will lock up the given number of coins and free
@@ -280,11 +292,6 @@ are no longer resulting in a response. The lifetime of an oracle can
 be extended using an \textbf{extend oracle transaction}.
 
 
-
-
-
-
-
 \subsection{Paying-for-others transaction wrapper}
 \label{sect:payingfor}
 
@@ -296,7 +303,7 @@ a hurdle for adoption. Of course, one can ask a user for an account and put
 some tokens on it, but then those tokens can be used for anything.
 The \aet\ solution is more powerful and can be used to pay for
 just specific transactions. It can be used to pay for both transaction
-fee and gas cost of a contract call.
+fee and \enquote{gas cost} of a contract call.
 
 Assume a game played via a contract on the blockchain. One interacts
 with the game, by calling the contract. In order to get more users for

@@ -3,7 +3,8 @@
 The \blockchain\ went live on November 28th, 2018. For the curious reader,
 there is a timestamp in each block and the first mined key-block has timestamp
 ``1543373685748'', which is the time in milliseconds using POSIX time. Since
-that first date, 3 major protocol updates have successfully be applied as of March 2020,
+that first date, 3 major protocol updates have successfully be applied as of
+March 2020,
 enriching the \blockchain\ with new features. The new protocols are effective
 at a certain height and the software supports the old protocol under that
 height and the new protocol from that height. Each protocol is referred to by
@@ -17,7 +18,7 @@ some of which we are going to outline in this section.
 
 \subsection{Formal verification}
 
-Over the course of its existence Ethereum has had many big flaws on deployed
+Over the course of its existence Ethereum has had many flaws of deployed
 contracts uncovered and abused. Some of these were simple developer errors and
 others very subtle due to the complexity of both the EVM and Solidity.
 
@@ -114,7 +115,10 @@ Unlike sharding, side-chains do not divide a global state space but each
 one has its own state. The idea of this approach is to have many specific,
 maybe even single purpose, chains which do not necessarily have to know of each
 other. The name child-chain implies that they are
-hooked into a parent chain. Communication between childen and parents, accross any hierarchy usually can happen via cross-chain atomic swaps. Alternatively it can be achieved via some sort of hierarchical escalation, in similar fashion to state channel force progress. 
+hooked into a parent chain. Communication between childen and parents, accross
+any hierarchy usually can happen via cross-chain atomic swaps. Alternatively it
+can be achieved via some sort of hierarchical escalation, in similar fashion to
+state channel force progress.
 Childchain then imply that each use case or æpp could get its own chain,
 thus only having to handle transactions for this one æpp and not be concerned
 with all the other applications. This in turn would then allow each æpp much
@@ -127,7 +131,10 @@ approaches in order to meet demands by billions of users.
 
 
 \subsection{Differences to v0.1 \blockchain\ whitepaper}
-The \blockchain\ has evolved from a whitepaper published in 2017 to a working system loaded with real value, also known as the \aet\ mainnet. In the process several things got adapted and fully re-engineered from scratch by (co)creators of Erlang, Haskell, Skala and Agda, languages in industrial use today. 
+The \blockchain\ has evolved from a whitepaper published in 2017 to a working
+system loaded with real value, also known as the \aet\ mainnet. In the process
+several things got adapted and fully re-engineered from scratch by (co)creators
+of Erlang, Haskell, Skala and Agda, languages in industrial use today.
 
 - Next generation Nakamoto consensus (also with cuckoo cycle PoW)
 
