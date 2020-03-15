@@ -1,72 +1,72 @@
 \section{Introduction}
 
-Blockchain technology has been attracting significant attention since Bitcoin
-was proposed by Nakamoto~\cite{SN} in 2008.
-Many blockchain platforms are being developed to serve the next generation of
-applications. The novelty of the field provides an interplay between developers
-offering new features, enabling new applications to be written by application
-developers, and application developers therewith requiring additional features
-or possibilities.
-
-\aet\~\cite{AE,UlfWigerCodeMesh2018} is an open source blockchain
+\Aet\ \cite{AE,UlfWigerCodeMesh2018} is an open source blockchain
 platform for advanced smart contract applications
 that can be used by millions of users. Several key technologies
-are put in place to meet these scaling requirements, most notably state
-channels, the next generation of Nakamoto consensus algorithm and the very
+are put in place to achieve these scaling requirements: state channels, the
+next generation of Nakamoto consensus algorithm (Bitcoin-NG) and the
 efficient FATE virtual machine for smart contract execution.
 
-Increases in transaction throughput, possibly millions of
+Increases in transaction throughput, possibly thousands of
 transactions per second, can be achieved via state channels (Sect.\
 \ref{sect:channels}),
-an off-chain encrypted peer-to-peer communication protocol for trustless execution of smart contracts. After
+an off-chain encrypted peer-to-peer communication protocol for trustless
+execution of smart contracts. After
 agreeing on-chain to collaborate in a state channel, parties communicate
 mutually authenticated transactions to each other. These transactions don't
 have to be recorded on chain and thus can be exchanged at much higher
 speed. Closing the channel, with or without dispute resolution, is performed
 on-chain again.
 
-Further increase increase of throughput is achieved by using a novel consensus algorithm.
+Further increase of throughput is achieved by using a novel consensus
+algorithm.
 The platform runs as a decentralized trustless distributed ledger using
 Proof-of-Work (PoW)~\cite{dwork1992pricing,back1997hashcash,Tromp2015CuckooCA}
 for leader election.
 In Sect.~\ref{sect:mining} we explain how we improve the scalability of
 original Nakamoto consensus~\cite{SN} by leveraging
 Bitcoin-NG~\cite{Eyal:2016:BSB:2930611.2930615}. The result of this change
-is a throughput of about 117 public mainnet on-chain transactions per second~\cite{source?} with a (micro)blocktime of three seconds and with
-low latency as opposed to the seven transactions per second of Bitcoin together with the ten minutes block confirmation time. 
+is a throughput of about 117 on-chain transactions per
+second~\cite{source?} with a (micro)blocktime of three seconds and with
+low latency as opposed to the seven transactions per second of Bitcoin at ten
+minutes block confirmation time.
 
 Additionally to the PoW, a weighted delegated governance system has been
-implemented. This way the users of \blockchain\ can express their (hardfork)choice in a tamperproof-way, signaling to the miners which fork would be more attractive in the future. 
+implemented. This way the users of \blockchain\ can express their
+(hardfork)choice in a tamperproof-way, signalling to the miners which fork
+would be more attractive in the future.
 
-The \blockchain\ offers a variety of different transaction types
-based on commonly used applications on other blockchain implementations.
-For example, by identifying that many blockchains have a need to give human
-readable, persistent names to objects on chain, the \blockchain\ provides a
+The \blockchain\ offers a variety of transaction types
+based on common applications on other blockchain implementations.
+For example, many blockchain users want to assign human readable, persistent
+names to objects on chain. The \blockchain\ provides a
 set of transactions that make this easy for developers, without the need to
 implement a smart contract for it (\ref{sect:aens}). Another example is a set
-of transactions to register and query oracles, which provide data from outside
-the blockchain.
-These transactions are explained in more detail in Sect.~\ref{sect:transactions}.
+of transactions to register and query oracles (\ref{sect:aeoracle}), which
+provide data from outside the blockchain.
+These transactions are explained in more detail in
+Sect.~\ref{sect:transactions}.
 
-Many features are yet to be invented, but can already be implemented
+Many features yet to be invented can already be implemented
 by users if they use the \aet\ smart contract language
 \textit{Sophia}. Sophia is a Turing-complete functional language
 designed with security in mind. Many mistakes that one can make in
 other contract languages are impossible to make or are easier to detect
-when using Sophia. In Sect.\ \ref{sect:sophia} we present some key
+when using Sophia. In Sect.\ \ref{sect:sophia} we present key
 ideas of the language.
 
-Contracts are compiled to bytecode, which is executed on a highly
+Contracts are compiled to bytecode, which is executed on the highly
 efficient virtual machine \textit{FATE}. Similar to other smart contract
-languages every operation has a gas cost associated to it. This cost reflects
+languages every operation has a \enquote{gas cost}g associated to it. This cost
+reflects
 the amount of work needed to execute a contract. The FATE virtual machine is
 specifically designed for
-\aet\ to meet the high security and efficiency demands, which we
+\aet\ to meet high security and efficiency demands, which we
 explain in more detail in Sect.~\ref{sect:fate}.
 
 The reference implementation of the \aet\ protocol is written using the
 functional language Erlang~\cite{Armstrong:2010:ERL:1810891.1810910}. This
 language originates from the telecommunication industry and is used in large
-distributed and concurrent systems (e.g.\ WhatsApp). However, the choice
+distributed and highly concurrent systems (e.g.\ WhatsApp). However, the choice
 of implementation language has no further implications for the techniques used
 and described in this paper.
