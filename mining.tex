@@ -172,8 +172,38 @@ network. Moreover, if it takes longer to compute the next key-block we
 are not bound to a maximum block size, because we generate new
 micro-blocks as long as no key-block has been found.
 
-\subsection{Weighted delegated voting}
-Governance through weigthed delegated voting. This section needs to be expanded.
-...
-...
-...
+\subsection{Weighted delegated coin-voting}
+
+A major problem in all decentralized systems is that of coordination between
+the different participants, especially because they might not share common
+goals with regards to the utility and development of the system.
+
+Giving all these different participants a way to signal their preferences is
+important to make decision processes legitimate and also collect as much
+information as possible.
+
+The previous section outlined the coordination game played by miners, where
+they vote with they computational power to signal which fork they support and
+thus decide the \enquote{main chain}. Coordination here is facilitated by the
+fork choice rule described above but miners do not have to follow it.
+
+Another group to consider are owners of the native \aet\ coin---although by no
+means can we assume that that group is homogeneous in their objectives. The
+signalling mechanism used for them is based on delegative
+ or liquid democracy \cite{ford2002delegative} and shareholder voting. This
+means in practice that any owner of coins can delegate their voting power to
+any other blockchain account. The voting power is based on the amount of coins
+owned. This means that opposed to \enquote{one person one vote}, it is
+\enquote{one coin one vote.}
+These two voting schemes were chosen because allowing the delegation of voting
+power allows people without enough expertise but a lot of stake to
+delegate their voting power to someone with the expertise but maybe lacking
+voting power. In theory this should lead to better decisions to be made. Making
+the voting power proportional to coins owned follows the logic that a bigger
+share of the value of the network implies more \enquote{skin in the game}.
+
+This scheme could then be used to prioritze future development efforts or in
+the case of a contentious fork signal which side might get support from most
+coin owners, which could then inform the behaviour of miners when choosing a
+fork to mine on.
+
