@@ -21,8 +21,8 @@ implementation, contract execution is performed in a
 defined semantics, such that all implementations perform exactly the
 same computation steps, with exactly the same result and charging
 exactly the same amount of gas. The \blockchain\ defines two virtual
-machines, the AEVM, compatible with the Ethereum blockchain, and the more
-efficient FATE virtual machine.
+machines, the AEVM, inspired by the Ethereum blockchain, and the more
+safe and efficient FATE virtual machine.
 
 The second challenge is to design a language to express contracts in
 such a way that one can understand and reason about the contract
@@ -80,7 +80,7 @@ time) the price is decreased. Someone buys the object by calling a
 executes,
 the contract computes the price given the current block number; if the caller
 has
-supplied enough funds in that call, the seller is paid, the
+supplied enough coins in that call, the seller is paid, the
 bidder is charged (possibly refunded the extras) and the contract
 enters a non sellable state for the object. The next bidder will fail
 the call and only pays for transaction costs, not for the object.
@@ -155,146 +155,188 @@ The sale conditions are transparent, but whether the actual object ever
 arrives is outside the scope of the blockchain
 
 
-\subsubsection{Oracles example}
+\subsubsection{State Channel example}
 
-An example of the use of oracles and contracts can be illustrated with
-a little lottery example. Note that all computation on a blockchain
-should be deterministic in order to be able to validate the
-results. If not exactly the same, the corresponding state hashes will
-differ. As a consequence there is no random number generator in the
-Sophia language\footnote{Even if some kind of random function would be
-  offered, it would be deterministic and hence have a predictable
-  outcome}. (Instead, the current blockhash could be used as entropy.)
+Contracts can be deployed on-chain or in a state channel. State channels
+provide means for two parties for executing transactions off-chain. Once the
+channel is opened on-chain all the communication is moved off-chain and it is
+just between the two participants. It is not limited by blockchain
+throughputh, fees or gas costs. This provides a new environment to run
+contracts in. In order to make most out of it, off-chain contracts can use
+on-chain data.
 
-Running a simple lottery in which users buy a ticket and after a while
-one draws one of the tickets as the winner, is somehow depending on
-some kind of fair randomness. If the number is known or computable at
-the start of the buying process, one might be able to figure out what
-ticket to buy to win the lottery. But if we close the lottery and then
-ask an oracle for a random number, then a trusted, but disconnected
-computation can be used to draw the winner.
+An example of the use of off-chain contract and an on-chain oracle can be
+illustrated with a simple insurance contract. Note that all computation on a
+blockchain must be deterministic in order to be able to validate the results.
+If not exactly the same, the corresponding state hashes will differ. This is
+true especially with state channels as contracts are executed by both
+participants in their own context. This requires both to share the same view
+of the chain\footnote{We achieve this by specifying the on-chain environment
+as part of the off-chain update.}.
 
-So assume there is such an oracle, monitoring the chain and registered
-with a reasonable query fee covering for its cost of operation. The
-oracle has an identifier, for the example say
+Running a simple insurance contract in which one user provides the service
+while the other insures their property for a certain timeframe from hailstorm
+requires some input from real life data. This is where oracle input comes: for
+the example we have an on-chain Oracle to produce data on whether there has
+been a hailstorm in a certain city. It publishes data pinned in time with a
+corresponding block height when it occurred. Later on the insured participant
+can use this response in order to claim their compensation. This can be done
+off-chain and it wouldn't consume any gas. If the insurer refuses to follow
+the contract, the insured party can use the blockchain as an arbiter and
+execute the contract on-chain.
+
+So assume there is such an oracle, monitoring the weather and registered with
+a reasonable query fee covering for its cost of operation. The oracle has an
+identifier, for the example say
 \begin{quote}
   \textit{"ok\_shEHMV8Q2F1HR86pcyF7DYpudg8hnvJwJuVE3berWpbktnL2R"}.
 \end{quote}
-We can now write a Sophia contract that takes this oracle identifier
-as input of its initialization and uses it for random numbers in the
-lottery game.
+We can now write a Sophia contract that takes this oracle identifier as input
+of its initialization and uses it for claiming the insurance. 
 
 \begin{verbatim}
-include "List.aes"
+contract ChannelInsurance =
 
-contract Lottery =
+  type city_t       = string
+  type gen_height_t = int
+  type query_t      = city_t * gen_height_t
+  type answer_t     = bool
+  type oracle_id    = oracle(query_t, answer_t)
+  type query_id     = oracle_query(query_t, answer_t)
 
-  record state = { participants : list(address),
-                   price_sum : int(),
-                   close_height : int(),
-                   oracle : oracle(int, int),
-                   query : option(oracle_query(int, int))  }
+  record state = { oracle          : oracle_id,
+                   city            : city_t,
+                   active_from     : gen_height_t,
+                   active_to       : gen_height_t,
+                   price_per_gen   : int,
+                   compensation    : int
+                   }
 
-  entrypoint init(rand : oracle(int, int)) : state =
-    { participants = [],
-      price_sum = 0,
-      close_height = 0,
-      oracle = rand,
-      query = None }
+  entrypoint init(oracle : oracle_id, city: city_t, price_per_gen: int, compensation: int) : state =
+    { oracle          = oracle,
+      city            = city,
+      price_per_gen   = price_per_gen,
+      compensation    = compensation,
+      active_from     = 0,
+      active_to       = 0
+      }
+
+  stateful payable entrypoint insure() =
+    require(Call.caller != Contract.creator, "service_provider")
+    require(Contract.balance + Call.value >= state.compensation, "not_enough_compensation")
+    let period : int = Call.value / state.price_per_gen
+    if (Chain.block_height >= state.active_to) // expired, renew
+      put(state{ active_from = Chain.block_height,
+                 active_to = Chain.block_height + period})
+    else // not expired, extend
+      put(state{ active_to = state.active_to + period })
+
+  stateful entrypoint withdraw(amount: int) =
+    require(Call.caller == Contract.creator, "not_service_provider")
+    if (Chain.block_height =< state.active_to) // insured
+      require(Contract.balance - amount >= state.compensation, "not_enough_compensation")
+    Chain.spend(Contract.creator, amount)
+
+  payable entrypoint deposit() =
+    require(Call.caller == Contract.creator, "not_service_provider")
+
+  entrypoint get_insurance_range() =
+    (state.active_from, state.active_to)
+
+  stateful entrypoint claim_insurance(q: query_id) =
+    require(Call.caller != Contract.creator, "service_provider")
+    switch(Oracle.get_answer(state.oracle, q))
+      None         =>
+        abort("no_response")
+      Some(was_there_hailstorm) =>
+        let (city, generation) = Oracle.get_question(state.oracle, q)
+        require(city == state.city, "different_city")
+        let is_in_range = generation >= state.active_from && generation =< state.active_to
+        require(is_in_range, "not_in_insurance_range")
+        require(was_there_hailstorm, "different_response")
+        Chain.spend(Call.caller, state.compensation)
+        put(state{ active_from = 0,
+                   active_to = 0})
+
 \end{verbatim}
 
-The contract stores a list of participants in its state, a price sum
-that increases for each ticket bought, a closing height after which no
-new tickets can be purchased. The initial closing height is zero,
-because initially there is no ongoing lottery. The state also contains
-an oracle and an optional query. This query will be instantiated when
-the lottery is closed and a ticket is drawn.
+The contract is deployed by the insurance service provider in a state channel.
+It stores the reference to the trusted oracle in its state, the price it
+expects for insurance for a single generation and in which city the insured
+city belongs to. It also contains the insured interval in block heights, which
+initially is set to 0.
 
-The creator of this contract may now start the lottery by supplying a relative
-closing height,
-for example, 20 key-blocks from that the transaction gets on chain;
-approximately one hour. Any user can then buy a ticket.
+The creator of this contract may now deposit initial amount for compensation.
+
 \begin{verbatim}
-  stateful payable entrypoint start(n : int) =
-    require( Call.caller == Contract.creator, "not creator" )
-    require( state.price_sum == 0, "lottery ongoing" )
-    require( n > 1, "block in future")
-    put(state{ participants = [],
-               close_height = Chain.block_height + n })
-
-  stateful payable entrypoint buy() =
-    require( state.close_height > Chain.block_height, "lottery closed" )
-    require( Call.value == 10, "price ticket 10" )
-    put(state{ participants = Call.caller :: state.participants,
-               price_sum = state.price_sum + 8 })  // we take 20%
+  payable entrypoint deposit() =
+    require(Call.caller == Contract.creator, "not_service_provider")
 \end{verbatim}
-Note that a lot of conditions are checked, resulting in abortion of
-the contract when falsified. In general, making the contract safe
-requires thinking through a large number of possible scenarios in
-which things may not work out as expected.
-For example, if no users buy a ticket\footnote{The price of the ticket
-is set to $10$ aettos instead of a more realistic
-$10\_000\_000\_000\_000\_000$ to
-make the code more readable}, the contract creator must be
-able to restart the lottery at a later time, but the creator should
-not be able to restart as soon as there are participants. Similarly,
-one should not allow participants to buy tickets when the lottery is
-closed.
 
-The keyword \verb+payable+ expresses that we expect the participants
-to add a token amount to the contract call transaction, which is
-checked by comparing \verb+Call.value+. Similarly, the contract
-creator needs to pay something into the contract to cover the oracle query
-fee\footnote{Note that there is no check in the contract that it has
-  enough funds to query the oracle after starting a lottery. The
-  participants are at risk here} in case there are too few
-participants.
+Note that there is a check there: only the owner of the contract - being the
+service provider - can execute that function. Since the insured participant is
+not expected to call that function - any attempt of doing so will result in
+aborting the call. This is true both off-chain and on-chain in a forced
+progress scenario.
 
-When the closing height is reached, someone, most likely the creator
-of the contract, asks the oracle to draw a number between 1 and the
-number of participants. This call returns the query., such that anyone
-can monitor the chain to see if the query has arrived. When that's the
-case, the winner, or anyone else, can call the claim function, which
-will transfer the price sum to the winner.
+The keyword \verb+payable+ expresses that we expect the caller to add a token
+amount to the contract call transaction, which could be checked by comparing
+\verb+Call.value+. There is no restriction for the amount being deposited in
+the contract and this could be done in a couple of different steps if needed.
+
+Once the compensation is present in the contract, the other party can
+call the \verb+insure+ function.
+
 \begin{verbatim}
- stateful entrypoint draw() : oracle_query(int, int) =
-     require( Chain.block_height > state.close_height, "ongoing lottery" )
-     require( state.price_sum > 0, "no ongoing lottery" )
-     require( state.query == None, "already drawn" )
-     let q =
-        Oracle.query(state.oracle, List.length(state.participants) - 1,
-                     Oracle.query_fee(state.oracle),
-                     RelativeTTL(5), RelativeTTL(480))
-     put(state{query = Some(q)})
-     q
-
-  stateful entrypoint claim() : option(address) =
-    switch(state.query)
-        None => abort( "no drawing" )
-        Some(query) =>
-          switch( Oracle.get_answer(state.oracle, query))
-             None => abort("waiting for query")
-             Some(winner) =>
-               let winner_account = List.get(winner, state.participants)
-               // Spend to winner
-               Chain.spend(winner_account, state.price_sum)
-               put(state{ price_sum = 0, query = None })
-               Some(winner_account)
+  stateful payable entrypoint insure() =
+    require(Call.caller != Contract.creator, "service_provider")
+    require(Contract.balance + Call.value >= state.compensation, "not_enough_compensation")
+    let period : int = Call.value / state.price_per_gen
+    if (Chain.block_height >= state.active_to) // expired, renew
+      put(state{ active_from = Chain.block_height,
+                 active_to = Chain.block_height + period})
+    else // not expired, extend
+      put(state{ active_to = state.active_to + period })
 \end{verbatim}
 
-The reason to make it possible for anyone to call these functions is
-to ensure that the contract creator can force progress to start a new
-lottery and the winner to be able to claim even if the contract owner
-is not around. The TTLs in the query assure that the oracle has
-approximately 15 minutes to answer, long enough to even get it out
-in busy times. Within a day one then has to claim the price sum,
-otherwise, because the query answer is then no longer on chain.
+There are some checks that it is not the insurance provider that is calling
+the contract and that the contract has enough tokens to cover the compensation
+in case of a hailstorm. If those pass the corresponding insurance period is
+calculated according to the tokens dedicated in the contract and the state is
+updated accordingly. Note that if there is an active insurance at the moment,
+the existing time frame is just extended. This allows for continuous insurances.
+
+Once an insurance event takes place, the insured party simply claims their
+due, providing the Oracle's response.
+
+\begin{verbatim}
+  stateful entrypoint claim_insurance(q: query_id) =
+    require(Call.caller != Contract.creator, "service_provider")
+    switch(Oracle.get_answer(state.oracle, q))
+      None         =>
+        abort("no_response")
+      Some(was_there_hailstorm) =>
+        let (city, generation) = Oracle.get_question(state.oracle, q)
+        require(city == state.city, "different_city")
+        let is_in_range = generation >= state.active_from && generation =< state.active_to
+        require(is_in_range, "not_in_insurance_range")
+        require(was_there_hailstorm, "different_response")
+        Chain.spend(Call.caller, state.compensation)
+        put(state{ active_from = 0,
+                   active_to = 0})
+\end{verbatim}
+
+Note that if any of the checks fail, the whole execution of the contract
+fails. This makes the state channel contract safe and trustless in both
+off-chain environment and in forced progress context. It is worth mentioning
+that in both scenarios it is only the two participants that can execute the
+contract. This is a big difference with on-chain deployed contracts.
+
+If all checks pass, the caller of the contract - the insured party - claims
+the compensation and the insurance is considered to closed.
 
 This contract is far from fully secure, but illustrates an example of
-how oracles and contracts can be used together.
-
-%TODO \subsubsection{Oracles and state channel example}
-
+how contracts in state channels can use on-chain data.
 
 \subsection{Readable Smart Contracts in Lexon}
 Human readable smart contracts compiling to Sophia.
@@ -401,4 +443,3 @@ bytes that are printed as a string.
 
 Both memory constraints and computation efficiency are important to
 enable smaller contracts to to get more computation into a micro-block.
-
