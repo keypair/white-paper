@@ -212,18 +212,20 @@ contract ChannelInsurance =
                    compensation    : int
                    }
 
-  entrypoint init(oracle : oracle_id, city: city_t, price_per_gen: int, compensation: int) : state =
-    { oracle          = oracle,
-      city            = city,
-      price_per_gen   = price_per_gen,
-      compensation    = compensation,
-      active_from     = 0,
-      active_to       = 0
-      }
+  entrypoint init(oracle : oracle_id, city: city_t, 
+    price_per_gen: int, compensation: int) : state =
+        { oracle          = oracle,
+          city            = city,
+          price_per_gen   = price_per_gen,
+          compensation    = compensation,
+          active_from     = 0,
+          active_to       = 0
+          }
 
   stateful payable entrypoint insure() =
     require(Call.caller != Contract.creator, "service_provider")
-    require(Contract.balance + Call.value >= state.compensation, "not_enough_compensation")
+    require(Contract.balance + Call.value >= state.compensation, 
+        "not_enough_compensation")
     let period : int = Call.value / state.price_per_gen
     if (Chain.block_height >= state.active_to) // expired, renew
       put(state{ active_from = Chain.block_height,
@@ -234,7 +236,8 @@ contract ChannelInsurance =
   stateful entrypoint withdraw(amount: int) =
     require(Call.caller == Contract.creator, "not_service_provider")
     if (Chain.block_height =< state.active_to) // insured
-      require(Contract.balance - amount >= state.compensation, "not_enough_compensation")
+      require(Contract.balance - amount >= state.compensation, 
+        "not_enough_compensation")
     Chain.spend(Contract.creator, amount)
 
   payable entrypoint deposit() =
@@ -251,7 +254,8 @@ contract ChannelInsurance =
       Some(was_there_hailstorm) =>
         let (city, generation) = Oracle.get_question(state.oracle, q)
         require(city == state.city, "different_city")
-        let is_in_range = generation >= state.active_from && generation =< state.active_to
+        let is_in_range = generation >= state.active_from 
+            && generation =< state.active_to
         require(is_in_range, "not_in_insurance_range")
         require(was_there_hailstorm, "different_response")
         Chain.spend(Call.caller, state.compensation)
@@ -290,7 +294,8 @@ call the \verb+insure+ function.
 \begin{verbatim}
   stateful payable entrypoint insure() =
     require(Call.caller != Contract.creator, "service_provider")
-    require(Contract.balance + Call.value >= state.compensation, "not_enough_compensation")
+    require(Contract.balance + Call.value >= state.compensation, 
+        "not_enough_compensation")
     let period : int = Call.value / state.price_per_gen
     if (Chain.block_height >= state.active_to) // expired, renew
       put(state{ active_from = Chain.block_height,
@@ -318,7 +323,8 @@ due, providing the Oracle's response.
       Some(was_there_hailstorm) =>
         let (city, generation) = Oracle.get_question(state.oracle, q)
         require(city == state.city, "different_city")
-        let is_in_range = generation >= state.active_from && generation =< state.active_to
+        let is_in_range = generation >= state.active_from 
+            && generation =< state.active_to
         require(is_in_range, "not_in_insurance_range")
         require(was_there_hailstorm, "different_response")
         Chain.spend(Call.caller, state.compensation)

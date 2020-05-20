@@ -95,10 +95,10 @@ But in a future where millions of people want to use \aet\ we will need higher
 throughput. One partial solution, state channels, are already available today
 and will become more relevant as usability improves.
 
-Besides state channels exist many other different approaches, which can be used
-alongside. The most obvious solution is to improve the consensus algorithm in
-such a way that it can handle higher throughput and there are already many
-other consensus algorithms, which can improve on Bitcoin-NG.
+%Besides state channels exist many other different approaches, which can be used
+%alongside. The most obvious solution is to improve the consensus algorithm in
+%such a way that it can handle higher throughput and there are already many
+%other consensus algorithms, which can improve on Bitcoin-NG.
 
 Another direction to go is to split the blockchain into distinct parts, which
 is also common for databases. These parts are then called shards and each one
@@ -109,8 +109,9 @@ will still have to communicate with each other, which is a possible bottleneck,
 and have to know of each others existence. But overall the system could present
 a big gain in throughput.
 
-The third widely researched solution are then side-chains, app-chains or
-child-chains.
+The third widely researched concept are then child-chains, app-chains or
+side-chains. Other names for child-chains are app-chains or side-chains.
+In the context of aeternity they will (most likely) be called hyperchains.
 Unlike sharding, side-chains do not divide a global state space but each
 one has its own state. The idea of this approach is to have many specific,
 maybe even single purpose, chains which do not necessarily have to know of each
@@ -125,7 +126,7 @@ with all the other applications. This in turn would then allow each æpp much
 more throughput and maybe even specific optimizations.
 
 All the solutions described here offer different trade-offs but could certainly
-be used in tandem. \aet\ will most likely take elements from all the presented
+be used in tandem. \aet\ will most likely evolve into all the presented
 approaches in order to meet demands by billions of users.
 
 
